@@ -18,11 +18,11 @@ jobs:
         env:
           POSTGRES_USER: user
           POSTGRES_PASSWORD: password
-          POSTGRES_DB: pi1g2
+          POSTGRES_DB: test_db
         ports:
           - 5432:5432
         options: >-
-          --health-cmd "pg_isready -U user -d pi1g2"
+          --health-cmd "pg_isready -U user -d test_db"
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
@@ -30,10 +30,9 @@ jobs:
     env:
       POSTGRES_USER: user
       POSTGRES_PASSWORD: password
-      POSTGRES_DB: pi1g2
+      POSTGRES_DB: test_db
       POSTGRES_HOST: localhost
       POSTGRES_PORT: 5432
-      PYTHONUNBUFFERED: 1
 
     steps:
       - name: Checkout code
