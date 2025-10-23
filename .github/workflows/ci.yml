@@ -31,7 +31,7 @@ jobs:
       POSTGRES_USER: user
       POSTGRES_PASSWORD: password
       POSTGRES_DB: pi1g2
-      POSTGRES_HOST: postgres
+      POSTGRES_HOST: localhost
       POSTGRES_PORT: 5432
       PYTHONUNBUFFERED: 1
 
