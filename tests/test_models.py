@@ -36,3 +36,16 @@ def test_trajeto_model_creation(db_session):
     assert trajeto.comandosExecutados == "a1000da0001e"
     assert trajeto.status is True
     assert trajeto.tempo == 42
+
+def test_trajeto_model_nullable_fields(db_session):
+    """Testa registro de trajeto sem todos os campos preenchidos"""
+    trajeto = TrajetoORM(
+        comandosEnviados="a0050",
+        tempo=5
+    )
+    
+    db_session.add(trajeto)
+    db_session.commit()
+    db_session.refresh(trajeto)
+    
+    assert trajeto.comandosExecutados is None
