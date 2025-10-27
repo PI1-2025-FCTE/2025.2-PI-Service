@@ -1,11 +1,18 @@
 from fastapi import FastAPI, WebSocket
 from fastapi.responses import HTMLResponse
-from app.database import engine
-import app.models as models
+from fastapi.middleware.cors import CORSMiddleware
+import os
 
-models.Base.metadata.create_all(bind=engine)
+app = FastAPI(title="ESP32 Car Control API", version="1.0.0")
 
-app = FastAPI()
+FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:3000")
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[FRONTEND_URL, "http://localhost:3000"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 html = """
 <!DOCTYPE html>
@@ -41,11 +48,24 @@ html = """
 </html>
 """
 
+@app.on_event("startup")
+async def startup_event():
+    from app.database import engine
+    import app.models as models
+    
+    models.Base.metadata.create_all(bind=engine)
 
 @app.get("/")
 async def get():
     return HTMLResponse(html)
 
+@app.get("/health")
+async def health():
+    return {
+        "status": "healthy",
+        "database": "connected",
+        "version": "1.0.0"
+    }
 
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
