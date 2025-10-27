@@ -49,3 +49,19 @@ def test_trajeto_model_nullable_fields(db_session):
     db_session.refresh(trajeto)
     
     assert trajeto.comandosExecutados is None
+
+def test_trajeto_model_incomplete_mission(db_session):
+    """Testa registrar trajeto interrompido"""
+    trajeto = TrajetoORM(
+        comandosEnviados="a1000da0500e",
+        comandosExecutados="a1000d", # possivel interrupcao
+        status=False,
+        tempo=15,
+    )
+    
+    db_session.add(trajeto)
+    db_session.commit()
+    db_session.refresh(trajeto)
+    
+    assert trajeto.status is False
+    assert trajeto.comandosExecutados != trajeto.comandosEnviados
