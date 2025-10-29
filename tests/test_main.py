@@ -14,6 +14,26 @@ def test_health_endpoint(client: TestClient):
     assert data["status"] == "healthy"
     assert "version" in data
 
+def test_create_trajeto(client: TestClient, db_session: Session):
+    trajeto = { "comandosEnviados": "a1000da0001e" }
+    
+    response = client.post("/trajetos/", json=trajeto)
+    
+    assert response.status_code == 201
+    data = response.json()
+    assert data["comandosEnviados"] == trajeto["comandosEnviados"]
+    assert "idTrajeto" in data
+    assert data["comandosExecutados"] is None
+    assert data["status"] is None
+    assert data["tempo"] is None
+
+def test_create_trajeto_missing_field(client: TestClient):
+    trajeto = {}
+    
+    response = client.post("/trajetos/", json=trajeto)
+    
+    assert response.status_code == 422
+
 def test_delete_trajeto(db_session: Session, client: TestClient):
     trajeto = TrajetoORM(
         comandosEnviados="a1000da0001e",
