@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models import TrajetoORM
 from app.schemas import TrajetoResponse, TrajetoCreate
+from typing import List
 
 router = APIRouter(
     prefix="/trajetos",
@@ -23,6 +24,11 @@ def create_trajeto(trajeto: TrajetoCreate, db: Session = Depends(get_db)):
     db.refresh(db_trajeto)
     
     return db_trajeto
+
+@router.get("/", response_model=List[TrajetoResponse])
+def list_trajetos(db: Session = Depends(get_db)):
+    trajetos = db.query(TrajetoORM).all()
+    return trajetos
 
 @router.delete("/{trajeto_id}", status_code=204)
 def delete_trajeto(trajeto_id: int, db: Session = Depends(get_db)):
