@@ -67,6 +67,37 @@ def test_list_trajetos_with_data(db_session: Session, client: TestClient):
     assert data[0]["comandosEnviados"] == "a1000da0001ed"
     assert data[1]["comandosEnviados"] == "dedededea2000da0003"
 
+def test_get_trajeto_by_id(db_session: Session, client: TestClient):
+    trajeto = TrajetoORM(
+        comandosEnviados="a1000da0001e",
+        comandosExecutados="a1000da0001e",
+        status=True,
+        tempo=42
+    )
+    
+    db_session.add(trajeto)
+    db_session.commit()
+    db_session.refresh(trajeto)
+    
+    id_trajeto = trajeto.idTrajeto
+    
+    response = client.get(f"/trajetos/{id_trajeto}")
+    
+    assert response.status_code == 200
+    data = response.json()
+    assert data["idTrajeto"] == id_trajeto
+    assert data["comandosEnviados"] == "a1000da0001e"
+    assert data["comandosExecutados"] == "a1000da0001e"
+    assert data["status"] is True
+    assert data["tempo"] == 42
+
+def test_get_trajeto_not_found(client: TestClient):
+    response = client.get("/trajetos/9999")
+    
+    assert response.status_code == 404
+    data = response.json()
+    assert data["detail"] == "Trajeto não encontrado"
+
 def test_delete_trajeto(db_session: Session, client: TestClient):
     trajeto = TrajetoORM(
         comandosEnviados="a1000da0001e",
