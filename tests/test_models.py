@@ -1,24 +1,7 @@
-import pytest
-from datetime import datetime
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
 from app.models import TrajetoORM
-from app.database import Base
+from sqlalchemy.orm import Session
 
-TEST_DATABASE_URL = "sqlite:///:memory:"
-
-@pytest.fixture
-def db_session():
-    """Cria sessao do banco para cada teste"""
-    engine = create_engine(TEST_DATABASE_URL, connect_args={"check_same_thread": False})
-    Base.metadata.create_all(bind=engine)
-    TestingSessionLocal = sessionmaker(bind=engine)
-    session = TestingSessionLocal()
-    yield session
-    session.close()
-    Base.metadata.drop_all(bind=engine)
-
-def test_trajeto_model_creation(db_session):
+def test_trajeto_model_creation(db_session: Session):
     """Criar trajeto com todos os campos"""
     trajeto = TrajetoORM(
         comandosEnviados="a1000da0001e",
@@ -50,7 +33,7 @@ def test_trajeto_model_nullable_fields(db_session):
     
     assert trajeto.comandosExecutados is None
 
-def test_trajeto_model_incomplete_mission(db_session):
+def test_trajeto_model_incomplete_mission(db_session: Session):
     """Testa registrar trajeto interrompido"""
     trajeto = TrajetoORM(
         comandosEnviados="a1000da0500e",
