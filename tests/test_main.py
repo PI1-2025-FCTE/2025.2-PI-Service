@@ -34,6 +34,39 @@ def test_create_trajeto_missing_field(client: TestClient):
     
     assert response.status_code == 422
 
+def test_list_trajetos_empty(client: TestClient):
+    response = client.get("/trajetos/")
+    
+    assert response.status_code == 200
+    data = response.json()
+    assert isinstance(data, list)
+    assert len(data) == 0
+
+def test_list_trajetos_with_data(db_session: Session, client: TestClient):
+    trajeto1 = TrajetoORM(
+        comandosEnviados="a1000da0001ed",
+        comandosExecutados="a1000da0001ed",
+        status=True,
+        tempo=42
+    )
+    trajeto2 = TrajetoORM(
+        comandosEnviados="dedededea2000da0003",
+        comandosExecutados=None,
+        status=False,
+        tempo=30
+    )
+    
+    db_session.add_all([trajeto1, trajeto2])
+    db_session.commit()
+    
+    response = client.get("/trajetos/")
+    
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data) == 2
+    assert data[0]["comandosEnviados"] == "a1000da0001ed"
+    assert data[1]["comandosEnviados"] == "dedededea2000da0003"
+
 def test_delete_trajeto(db_session: Session, client: TestClient):
     trajeto = TrajetoORM(
         comandosEnviados="a1000da0001e",
