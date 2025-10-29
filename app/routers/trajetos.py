@@ -30,6 +30,13 @@ def list_trajetos(db: Session = Depends(get_db)):
     trajetos = db.query(TrajetoORM).all()
     return trajetos
 
+@router.get("/{trajeto_id}", response_model=TrajetoResponse)
+def get_trajeto(trajeto_id: int, db: Session = Depends(get_db)):
+    trajeto = db.get(TrajetoORM, trajeto_id)
+    if not trajeto:
+        raise HTTPException(status_code=404, detail="Trajeto não encontrado")
+    return trajeto
+
 @router.delete("/{trajeto_id}", status_code=204)
 def delete_trajeto(trajeto_id: int, db: Session = Depends(get_db)):
     trajeto = db.get(TrajetoORM, trajeto_id)
