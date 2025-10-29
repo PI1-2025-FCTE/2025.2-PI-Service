@@ -8,8 +8,6 @@ class TrajetoCreate(BaseModel):
     comandosExecutados: Optional[str] = Field(None, description="Commands actually executed")
     status: bool = Field(True, description="True if completed successfully")
     tempo: int = Field(..., ge=0, description="Execution time in seconds")
-    trajectory_data: Optional[Dict[str, Any]] = Field(None, description="Trajectory points and metadata")
-    distance_traveled: Optional[float] = Field(None, ge=0, description="Total distance in cm")
 
     model_config = {
         "json_schema_extra": {
@@ -27,7 +25,6 @@ class TrajetoCreate(BaseModel):
 
 class TrajetoResponse(BaseModel):
     idTrajeto: int
-    timestamp: datetime
     comandosEnviados: str
     comandosExecutados: Optional[str]
     status: bool

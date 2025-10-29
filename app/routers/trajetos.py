@@ -15,9 +15,7 @@ def create_trajeto(trajeto: TrajetoCreate, db: Session = Depends(get_db)):
         comandosEnviados=trajeto.comandosEnviados,
         comandosExecutados=trajeto.comandosExecutados,
         status=trajeto.status,
-        tempo=trajeto.tempo,
-        trajectory_data=trajeto.trajectory_data,
-        distance_traveled=trajeto.distance_traveled
+        tempo=trajeto.tempo
     )
     
     db.add(db_trajeto)
