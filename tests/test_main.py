@@ -125,3 +125,23 @@ def test_delete_trajeto_not_found(client: TestClient):
     assert response.status_code == 404
     data = response.json()
     assert data["detail"] == "Trajeto não encontrado"
+
+def test_all_endpoints(db_session: Session, client: TestClient):
+    trajeto = {"comandosEnviados": "test_command"}
+    response = client.post("/trajetos/", json=trajeto)
+    assert response.status_code == 201
+    created_id = response.json()["idTrajeto"]
+    
+    response = client.get(f"/trajetos/{created_id}")
+    assert response.status_code == 200
+    assert response.json()["comandosEnviados"] == "test_command"
+    
+    response = client.get("/trajetos/")
+    assert response.status_code == 200
+    assert len(response.json()) >= 1
+    
+    response = client.delete(f"/trajetos/{created_id}")
+    assert response.status_code == 204
+    
+    response = client.get(f"/trajetos/{created_id}")
+    assert response.status_code == 404
