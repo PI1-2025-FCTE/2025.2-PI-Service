@@ -12,12 +12,7 @@ router = APIRouter(
 
 @router.post("/", response_model=TrajetoResponse, status_code=status.HTTP_201_CREATED)
 def create_trajeto(trajeto: TrajetoCreate, db: Session = Depends(get_db)):
-    db_trajeto = TrajetoORM(
-        comandosEnviados=trajeto.comandosEnviados,
-        comandosExecutados=trajeto.comandosExecutados,
-        status=trajeto.status,
-        tempo=trajeto.tempo
-    )
+    db_trajeto = TrajetoORM(comandosEnviados=trajeto.comandosEnviados)
     
     db.add(db_trajeto)
     db.commit()
