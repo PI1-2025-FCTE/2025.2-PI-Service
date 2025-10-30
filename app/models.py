@@ -6,6 +6,6 @@ class TrajetoORM(Base):
 
     idTrajeto = Column(Integer, primary_key=True, index=True)
     comandosEnviados = Column(Text, nullable=False)
-    comandosExecutados = Column(Text)
-    status = Column(Boolean)
-    tempo = Column(Integer, nullable=False)
+    comandosExecutados = Column(Text, nullable=True)
+    status = Column(Boolean, nullable=True)
+    tempo = Column(Integer, nullable=True)

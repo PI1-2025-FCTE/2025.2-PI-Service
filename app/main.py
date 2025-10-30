@@ -1,11 +1,30 @@
+from contextlib import asynccontextmanager
 from fastapi import FastAPI, WebSocket
 from fastapi.responses import HTMLResponse
-from app.database import engine
-import app.models as models
+from fastapi.middleware.cors import CORSMiddleware
+from app.routers import trajetos
+import os
 
-models.Base.metadata.create_all(bind=engine)
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    from app.database import engine
+    import app.models as models
 
-app = FastAPI()
+    models.Base.metadata.create_all(bind=engine)
+    yield
+
+app = FastAPI(title="ESP32 Car Control API", version="1.0.0", lifespan=lifespan, docs_url="/docs")
+app.include_router(trajetos.router)
+
+FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:3000")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[FRONTEND_URL, "http://localhost:3000"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 html = """
 <!DOCTYPE html>
@@ -41,11 +60,17 @@ html = """
 </html>
 """
 
-
 @app.get("/")
 async def get():
     return HTMLResponse(html)
 
+@app.get("/health")
+async def health():
+    return {
+        "status": "healthy",
+        "database": "connected",
+        "version": "1.0.0"
+    }
 
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
