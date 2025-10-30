@@ -28,11 +28,13 @@ def list_trajetos(db: Session = Depends(get_db)):
 @router.get("/{trajeto_id}", response_model=TrajetoResponse)
 def get_trajeto(trajeto_id: int, db: Session = Depends(get_db)):
     trajeto = db.get(TrajetoORM, trajeto_id)
+
     if not trajeto:
         raise HTTPException(status_code=404, detail="Trajeto não encontrado")
+    
     return trajeto
 
-@router.delete("/{trajeto_id}", status_code=204)
+@router.delete("/{trajeto_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_trajeto(trajeto_id: int, db: Session = Depends(get_db)):
     trajeto = db.get(TrajetoORM, trajeto_id)
 
@@ -41,3 +43,31 @@ def delete_trajeto(trajeto_id: int, db: Session = Depends(get_db)):
 
     db.delete(trajeto)
     db.commit()
+
+@router.post("/{trajeto_id}/cancelar", status_code=status.HTTP_200_OK)
+async def cancelar_trajetoria(trajeto_id: int, db: Session = Depends(get_db)):
+    trajeto = db.get(TrajetoORM, trajeto_id)
+
+    if not trajeto:
+        raise HTTPException(status_code=404, detail="Trajeto não encontrado")
+
+    if trajeto.status is False:
+        raise HTTPException(
+            status_code=400, 
+            detail="Trajeto já foi cancelado anteriormente"
+        )
+
+    if trajeto.status is True:
+        raise HTTPException(
+            status_code=400, 
+            detail="Trajeto já foi concluído e não pode ser cancelado"
+        )
+
+    # TODO: Enviar comando de parada para ESP via Websocket.
+    trajeto.status = False
+    db.add(trajeto)
+    db.commit()
+    db.refresh(trajeto)
+
+    return {"detail": f"Trajeto {trajeto_id} cancelado com sucesso."}
+

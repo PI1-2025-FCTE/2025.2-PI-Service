@@ -13,7 +13,7 @@ async def lifespan(app: FastAPI):
     models.Base.metadata.create_all(bind=engine)
     yield
 
-app = FastAPI(title="ESP32 Car Control API", version="1.0.0", lifespan=lifespan)
+app = FastAPI(title="ESP32 Car Control API", version="1.0.0", lifespan=lifespan, docs_url="/docs")
 app.include_router(trajetos.router)
 
 FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:3000")
