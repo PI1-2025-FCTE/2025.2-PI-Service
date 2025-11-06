@@ -2,9 +2,9 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from app.models import TrajetoORM
 from app.schemas import TrajetoResponse, TrajetoCreate
-from app.dependencies import get_db, get_mqtt_client
+from app.dependencies import get_db, get_mqtt_manager
+from app.mqtt_manager import MQTTManager
 from typing import List
-from gmqtt import Client as MQTTClient
 
 router = APIRouter(
     prefix="/trajetos",
@@ -16,23 +16,32 @@ async def create_trajeto(
     device_id: str,
     trajeto: TrajetoCreate,
     db: Session = Depends(get_db),
-    client: MQTTClient = Depends(get_mqtt_client)
+    mqtt_manager: MQTTManager = Depends(get_mqtt_manager)
 ):
-    if not trajeto or not trajeto.comandosEnviados:
-        raise HTTPException(status_code=400, detail="Nenhum comando enviado")
+    if not mqtt_manager.is_device_online(device_id):
+        raise HTTPException(
+            status_code=400,
+            detail=f"Dispositivo {device_id} não está online"
+        )
 
     db_trajeto = TrajetoORM(comandosEnviados=trajeto.comandosEnviados)
     db.add(db_trajeto)
-    db.commit()
-    db.refresh(db_trajeto)
 
     topic = f"devices/{device_id}/commands"
     message = trajeto.comandosEnviados
 
-    client.publish(topic, message)
+    try:
+        mqtt_manager.publish(topic, message)
+        db.commit()
+        db.refresh(db_trajeto)
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail=f"Falha ao enviar comandos MQTT para {device_id}: {e}"
+        )
 
     return db_trajeto
-
 
 @router.get("/", response_model=List[TrajetoResponse])
 async def list_trajetos(db: Session = Depends(get_db)):
@@ -57,31 +66,4 @@ async def delete_trajeto(trajeto_id: int, db: Session = Depends(get_db)):
 
     db.delete(trajeto)
     db.commit()
-
-@router.post("/{trajeto_id}/cancelar", status_code=status.HTTP_200_OK)
-async def cancelar_trajetoria(trajeto_id: int, db: Session = Depends(get_db)):
-    trajeto = db.get(TrajetoORM, trajeto_id)
-
-    if not trajeto:
-        raise HTTPException(status_code=404, detail="Trajeto não encontrado")
-
-    if trajeto.status is False:
-        raise HTTPException(
-            status_code=400, 
-            detail="Trajeto já foi cancelado anteriormente"
-        )
-
-    if trajeto.status is True:
-        raise HTTPException(
-            status_code=400, 
-            detail="Trajeto já foi concluído e não pode ser cancelado"
-        )
-
-    # TODO: Enviar comando de parada para ESP via Websocket.
-    trajeto.status = False
-    db.add(trajeto)
-    db.commit()
-    db.refresh(trajeto)
-
-    return {"detail": f"Trajeto {trajeto_id} cancelado com sucesso."}
 

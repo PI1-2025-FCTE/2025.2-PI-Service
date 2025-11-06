@@ -1,5 +1,7 @@
 from app.database import SessionLocal
-from app.mqtt_client import mqtt_client
+from app.mqtt_manager import MQTTManager
+
+mqtt_manager: MQTTManager = MQTTManager()
 
 def get_db():
     db = SessionLocal()
@@ -8,5 +10,5 @@ def get_db():
     finally:
         db.close()
 
-async def get_mqtt_client():
-    return mqtt_client
+def get_mqtt_manager() -> MQTTManager:
+    return mqtt_manager

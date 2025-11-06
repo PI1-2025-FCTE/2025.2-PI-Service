@@ -4,6 +4,7 @@ python-dotenv
 sqlalchemy
 psycopg2-binary
 pytest
+pytest-asyncio
 pytest-cov
 pydantic
 gmqtt
