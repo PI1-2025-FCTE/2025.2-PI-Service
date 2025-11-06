@@ -2,6 +2,9 @@ import os
 import json
 from typing import Dict, Optional, Any
 from gmqtt import Client as MQTTClient
+from sqlalchemy.orm import Session
+from app.database import SessionLocal
+from app.models import TrajetoORM
 
 MQTT_HOST: str = os.getenv("MQTT_HOST", "mqtt")
 MQTT_PORT: int = int(os.getenv("MQTT_PORT", 1883))
@@ -62,6 +65,44 @@ class MQTTManager:
                     print("[MQTT] payload inválido")
             elif category == "trajeto":
                 print(f"[TRAJETO] {device_id}: {payload_str}")
+                try:
+                    trajeto_data: dict = json.loads(payload_str)
+                    trajeto_id = trajeto_data.get("idTrajeto")
+                    
+                    if not trajeto_id:
+                        print(f"[ERROR] id não foi mandado")
+                        return
+                    
+                    db: Session = SessionLocal()
+                    try:
+                        db_trajeto = db.get(TrajetoORM, trajeto_id)
+                        
+                        if not db_trajeto:
+                            print(f"[ERROR] Trajeto com ID {trajeto_id} não encontrado no banco")
+                            return
+                        
+                        if "comandosExecutados" in trajeto_data:
+                            db_trajeto.comandosExecutados = trajeto_data["comandosExecutados"]
+                        if "status" in trajeto_data:
+                            db_trajeto.status = trajeto_data["status"]
+                        if "tempo" in trajeto_data:
+                            db_trajeto.tempo = trajeto_data["tempo"]
+                        
+                        db.commit()
+                        db.refresh(db_trajeto)
+                        print(f"[TRAJETO UPDATED] ID: {db_trajeto.idTrajeto}, Device: {device_id}")
+                        print(f"  comandosExecutados: {db_trajeto.comandosExecutados}")
+                        print(f"  status: {db_trajeto.status}")
+                        print(f"  tempo: {db_trajeto.tempo}")
+                        
+                    except Exception as e:
+                        db.rollback()
+                        print(f"[ERROR] erro {e}")
+                    finally:
+                        db.close()
+                        
+                except json.JSONDecodeError:
+                    print(f"[ERROR] erro {payload_str}")
 
     def is_device_online(self, device_id: str) -> bool:
         """Verifica se um dispositivo está online."""

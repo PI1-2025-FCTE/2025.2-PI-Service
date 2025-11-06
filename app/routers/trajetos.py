@@ -26,16 +26,18 @@ async def create_trajeto(
 
     db_trajeto = TrajetoORM(comandosEnviados=trajeto.comandosEnviados)
     db.add(db_trajeto)
+    db.commit()
+    db.refresh(db_trajeto)
 
     topic = f"devices/{device_id}/commands"
     message = trajeto.comandosEnviados
+    message += 'i'
+    message += str(db_trajeto.idTrajeto)
 
     try:
         mqtt_manager.publish(topic, message)
-        db.commit()
-        db.refresh(db_trajeto)
+        
     except Exception as e:
-        db.rollback()
         raise HTTPException(
             status_code=500,
             detail=f"Falha ao enviar comandos MQTT para {device_id}: {e}"
