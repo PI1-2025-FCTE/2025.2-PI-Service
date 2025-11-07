@@ -1,6 +1,7 @@
 import pytest
 import json
 from app.mqtt_manager import MQTTManager
+from unittest.mock import patch, MagicMock
 
 @pytest.mark.asyncio
 async def test_connect_calls_client_connect(mqtt_manager_mock: MQTTManager):
@@ -74,3 +75,19 @@ def test_publish_calls_client_publish(mqtt_manager_mock: MQTTManager):
     mqtt_manager_mock.client.publish.assert_called_once_with(
         topic, message, qos=qos, retain=retain, **extra_kwargs
     )
+
+def test_handle_trajeto_calls_service_update(mqtt_manager_mock: MQTTManager):
+    device_id = "dev_123"
+    payload = '{"idTrajeto": 1, "status": true}'
+
+    with patch("app.mqtt_manager.TrajetoRepository") as repo_mock_cls, \
+         patch("app.mqtt_manager.TrajetoService") as service_mock_cls:
+
+        repo_mock = repo_mock_cls.return_value
+        service_mock = service_mock_cls.return_value
+        service_mock.update_trajeto = MagicMock()
+
+        mqtt_manager_mock._handle_trajeto(device_id, payload)
+
+        service_mock_cls.assert_called_once_with(repo_mock)
+        service_mock.update_trajeto.assert_called_once_with(1, {"idTrajeto": 1, "status": True})

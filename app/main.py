@@ -14,7 +14,6 @@ async def lifespan(app: FastAPI):
     models.Base.metadata.create_all(bind=engine)
 
     mqtt_manager = get_mqtt_manager()
-
     await mqtt_manager.connect()
 
     try:

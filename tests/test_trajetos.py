@@ -1,5 +1,9 @@
+import pytest
 from fastapi.testclient import TestClient
 from app.models import TrajetoORM
+from app.services.trajetos import TrajetoService
+from app.repositories.trajetos import TrajetoRepository
+from app.exceptions.trajetos import TrajetoNotFoundException
 from sqlalchemy.orm import Session
 from unittest.mock import MagicMock
 
@@ -138,3 +142,44 @@ def test_delete_trajeto_not_found(client: TestClient):
     assert response.status_code == 404
     data = response.json()
     assert data["detail"] == "Trajeto não encontrado"
+
+def test_update_trajeto_success(db_session: Session):
+    trajeto = TrajetoORM(comandosEnviados="original", comandosExecutados=None, status=False, tempo=0)
+    db_session.add(trajeto)
+    db_session.commit()
+    db_session.refresh(trajeto)
+    
+    repo = TrajetoRepository(db_session)
+    service = TrajetoService(repo)
+
+    update_data = {"comandosExecutados": "novo", "status": True, "tempo": 50}
+    updated_trajeto = service.update_trajeto(trajeto.idTrajeto, update_data)
+
+    assert updated_trajeto.comandosExecutados == "novo"
+    assert updated_trajeto.status is True
+    assert updated_trajeto.tempo == 50
+
+def test_update_trajeto_partial_update(db_session: Session):
+    trajeto = TrajetoORM(comandosEnviados="original", comandosExecutados=None, status=False, tempo=0)
+    db_session.add(trajeto)
+    db_session.commit()
+    db_session.refresh(trajeto)
+    
+    repo = TrajetoRepository(db_session)
+    service = TrajetoService(repo)
+
+    update_data = {"status": True}
+    updated_trajeto = service.update_trajeto(trajeto.idTrajeto, update_data)
+
+    assert updated_trajeto.comandosEnviados == "original"
+    assert updated_trajeto.status is True
+    assert updated_trajeto.tempo == 0
+
+def test_update_trajeto_not_found(db_session: Session):
+    repo = TrajetoRepository(db_session)
+    service = TrajetoService(repo)
+
+    update_data = {"comandosEnviados": "novo"}
+
+    with pytest.raises(TrajetoNotFoundException):
+        service.update_trajeto(9999, update_data)
