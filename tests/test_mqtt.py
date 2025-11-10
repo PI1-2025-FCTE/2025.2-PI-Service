@@ -27,28 +27,9 @@ def test_on_message_status_valid_json_updates_state(mqtt_manager_mock: MQTTManag
     assert mqtt_manager_mock.devices[device_id]["status"] == "online"
     assert mqtt_manager_mock.devices[device_id]["temp"] == 25
 
-def test_on_message_status_invalid_json_does_not_crash(mqtt_manager_mock: MQTTManager):
-    device_id = "dev_2"
-    topic = f"devices/{device_id}/status"
-    payload = b"{invalid_json"
-    mqtt_manager_mock.on_message(mqtt_manager_mock.client, topic, payload, 0, None)
-    assert device_id not in mqtt_manager_mock.devices
-
-def test_on_message_trajeto_prints_message(mqtt_manager_mock: MQTTManager):
-    device_id = "dev_3"
-    topic = f"devices/{device_id}/trajeto"
-    payload = b"trajeto test"
-    mqtt_manager_mock.on_message(mqtt_manager_mock.client, topic, payload, 0, None)
-    assert device_id not in mqtt_manager_mock.devices
-
 def test_on_message_irrelevant_topic_does_nothing(mqtt_manager_mock: MQTTManager):
     mqtt_manager_mock.on_message(mqtt_manager_mock.client, "foo/bar/baz", b"{}", 0, None)
     assert mqtt_manager_mock.devices == {}
-
-def test_on_message_payload_decode_error_does_not_crash(mqtt_manager_mock: MQTTManager):
-    payload = b"\xff\xfe\x00"
-    mqtt_manager_mock.on_message(mqtt_manager_mock.client, "devices/dev_err/status", payload, 0, None)
-    assert "dev_err" not in mqtt_manager_mock.devices
 
 @pytest.mark.parametrize(
     "device_id, state, expected",
@@ -76,9 +57,21 @@ def test_publish_calls_client_publish(mqtt_manager_mock: MQTTManager):
         topic, message, qos=qos, retain=retain, **extra_kwargs
     )
 
+def test_on_message_trajeto_routes_to_handle_trajeto(mqtt_manager_mock: MQTTManager):
+    device_id = "dev_123"
+    topic = f"devices/{device_id}/trajeto"
+    payload = json.dumps({"idTrajeto": 42, "status": True, "tempo": 50}).encode()
+
+    with patch.object(mqtt_manager_mock, "_handle_trajeto") as handle_trajeto_mock:
+        mqtt_manager_mock.on_message(mqtt_manager_mock.client, topic, payload, 0, None)
+
+        handle_trajeto_mock.assert_called_once_with(
+            device_id, payload.decode()
+        )
+
 def test_handle_trajeto_calls_service_update(mqtt_manager_mock: MQTTManager):
     device_id = "dev_123"
-    payload = '{"idTrajeto": 1, "status": true}'
+    payload = '{"idTrajeto": 1, "status": true, "tempo": 55}'
 
     with patch("app.mqtt_manager.TrajetoRepository") as repo_mock_cls, \
          patch("app.mqtt_manager.TrajetoService") as service_mock_cls:
@@ -90,4 +83,4 @@ def test_handle_trajeto_calls_service_update(mqtt_manager_mock: MQTTManager):
         mqtt_manager_mock._handle_trajeto(device_id, payload)
 
         service_mock_cls.assert_called_once_with(repo_mock)
-        service_mock.update_trajeto.assert_called_once_with(1, {"idTrajeto": 1, "status": True})
+        service_mock.update_trajeto.assert_called_once_with(1, {"idTrajeto": 1, "status": True, "tempo": 55})

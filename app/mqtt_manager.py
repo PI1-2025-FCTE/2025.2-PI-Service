@@ -49,11 +49,7 @@ class MQTTManager:
         qos: int,
         properties: Optional[Any] = None
     ) -> None:
-        try:
-            payload_str = payload.decode()
-        except Exception:
-            payload_str = ""
-            print(f"[MQTT ERROR] payload não pôde ser decodificado: {payload}")
+        payload_str = payload.decode()
 
         parts = topic.split("/")
         if len(parts) < 3 or parts[0] != "devices":
@@ -65,25 +61,18 @@ class MQTTManager:
             self._handle_status(device_id, payload_str)
         elif category == "trajeto":
             self._handle_trajeto(device_id, payload_str)
-        else:
-            print(f"[WARN] Categoria desconhecida: {category}")
 
     def _handle_status(self, device_id: str, payload_str: str):
-        try:
-            status_data = json.loads(payload_str)
-            self.devices[device_id] = status_data
-        except json.JSONDecodeError:
-            print(f"[MQTT] payload inválido para status: {payload_str}")
+        status_data = json.loads(payload_str)
+        self.devices[device_id] = status_data
 
     def _handle_trajeto(self, device_id: str, payload_str: str):
         print(f"[TRAJETO] {device_id}: {payload_str}")
-        try:
-            trajeto_data = json.loads(payload_str)
-        except json.JSONDecodeError:
-            print(f"[ERROR] JSON inválido: {payload_str}")
-            return
+
+        trajeto_data = json.loads(payload_str)
 
         trajeto_id = trajeto_data.get("idTrajeto")
+
         if not trajeto_id:
             print("[ERROR] idTrajeto não fornecido")
             return
