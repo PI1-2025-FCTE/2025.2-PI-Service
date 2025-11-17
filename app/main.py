@@ -1,6 +1,5 @@
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, WebSocket
-from fastapi.responses import HTMLResponse
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.routers import trajetos, devices
 from app.dependencies import get_mqtt_manager
