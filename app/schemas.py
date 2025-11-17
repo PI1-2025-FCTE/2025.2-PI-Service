@@ -16,6 +16,10 @@ class TrajetoCreate(BaseModel):
         }
     }
 
+class TrajetoUpdate(BaseModel):
+    status: Optional[bool] = None
+    comandosExecutados: Optional[str] = None
+    tempo: Optional[int] = None
 
 class TrajetoResponse(BaseModel):
     idTrajeto: int

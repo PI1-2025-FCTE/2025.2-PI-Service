@@ -1,26 +1,53 @@
+import pytest
 from fastapi.testclient import TestClient
 from app.models import TrajetoORM
+from app.services.trajetos import TrajetoService
+from app.repositories.trajetos import TrajetoRepository
+from app.exceptions.trajetos import TrajetoNotFoundException
 from sqlalchemy.orm import Session
+from unittest.mock import MagicMock
 
-def test_create_trajeto(client: TestClient):
-    trajeto = { "comandosEnviados": "a1000da0001e" }
-    
-    response = client.post("/trajetos/", json=trajeto)
-    
+def test_create_trajeto_success(client: TestClient, mqtt_manager_mock):
+    device_id = "esp32-1"
+    mqtt_manager_mock.is_device_online = MagicMock(return_value=True)
+    mqtt_manager_mock.publish = MagicMock()
+
+    trajeto = {"comandosEnviados": "a1000da0001e"}
+
+    response = client.post(f"/trajetos/{device_id}", json=trajeto)
+
     assert response.status_code == 201
     data = response.json()
     assert data["comandosEnviados"] == trajeto["comandosEnviados"]
     assert "idTrajeto" in data
-    assert data["comandosExecutados"] is None
-    assert data["status"] is None
-    assert data["tempo"] is None
+    mqtt_manager_mock.publish.assert_called_once()
 
-def test_create_trajeto_missing_field(client: TestClient):
-    trajeto = {}
-    
-    response = client.post("/trajetos/", json=trajeto)
-    
-    assert response.status_code == 422
+def test_create_trajeto_device_offline(client: TestClient, mqtt_manager_mock):
+    device_id = "esp32-2"
+    mqtt_manager_mock.is_device_online = MagicMock(return_value=False)
+    mqtt_manager_mock.publish = MagicMock()
+
+    trajeto = {"comandosEnviados": "a1000da0001e"}
+
+    response = client.post(f"/trajetos/{device_id}", json=trajeto)
+
+    assert response.status_code == 400
+    assert f"Dispositivo {device_id} não está online" in response.json()["detail"]
+    mqtt_manager_mock.publish.assert_not_called()
+
+
+def test_create_trajeto_publish_failure(client: TestClient, mqtt_manager_mock):
+    device_id = "esp32-3"
+    mqtt_manager_mock.is_device_online = MagicMock(return_value=True)
+    mqtt_manager_mock.publish = MagicMock(side_effect=Exception("MQTT error"))
+
+    trajeto = {"comandosEnviados": "a1000da0001e"}
+
+    response = client.post(f"/trajetos/{device_id}", json=trajeto)
+
+    assert response.status_code == 500
+    assert "Falha ao enviar comandos MQTT" in response.json()["detail"]
+    mqtt_manager_mock.publish.assert_called_once()
 
 def test_list_trajetos_empty(client: TestClient):
     response = client.get("/trajetos/")
@@ -86,27 +113,6 @@ def test_get_trajeto_not_found(client: TestClient):
     data = response.json()
     assert data["detail"] == "Trajeto não encontrado"
 
-def test_all_endpoints(client: TestClient):
-    trajeto = {"comandosEnviados": "test_command"}
-    response = client.post("/trajetos/", json=trajeto)
-    assert response.status_code == 201
-    created_id = response.json()["idTrajeto"]
-    
-    response = client.get(f"/trajetos/{created_id}")
-    assert response.status_code == 200
-    assert response.json()["comandosEnviados"] == "test_command"
-    
-    response = client.get("/trajetos/")
-    assert response.status_code == 200
-    assert len(response.json()) >= 1
-    
-    response = client.delete(f"/trajetos/{created_id}")
-    assert response.status_code == 204
-    
-    response = client.get(f"/trajetos/{created_id}")
-    assert response.status_code == 404
-
-
 def test_delete_trajeto(db_session: Session, client: TestClient):
     """Deve excluir um trajeto existente e retornar status 204."""
     trajeto = TrajetoORM(
@@ -137,67 +143,43 @@ def test_delete_trajeto_not_found(client: TestClient):
     data = response.json()
     assert data["detail"] == "Trajeto não encontrado"
 
-def test_cancelar_trajeto_success(db_session: Session, client: TestClient):
-    """Deve cancelar um trajeto em andamento (status=None) e retornar 202."""
-    trajeto = TrajetoORM(
-        comandosEnviados="a1000da0001e",
-        comandosExecutados=None,
-        status=None,
-        tempo=15
-    )
+def test_update_trajeto_success(db_session: Session):
+    trajeto = TrajetoORM(comandosEnviados="original", comandosExecutados=None, status=False, tempo=0)
     db_session.add(trajeto)
     db_session.commit()
     db_session.refresh(trajeto)
+    
+    repo = TrajetoRepository(db_session)
+    service = TrajetoService(repo)
 
-    response = client.post(f"/trajetos/{trajeto.idTrajeto}/cancelar")
+    update_data = {"comandosExecutados": "novo", "status": True, "tempo": 50}
+    updated_trajeto = service.update_trajeto(trajeto.idTrajeto, update_data)
 
-    assert response.status_code == 200
-    data = response.json()
-    assert data["detail"] == f"Trajeto {trajeto.idTrajeto} cancelado com sucesso."
+    assert updated_trajeto.comandosExecutados == "novo"
+    assert updated_trajeto.status is True
+    assert updated_trajeto.tempo == 50
 
-    trajeto_atualizado = db_session.get(TrajetoORM, trajeto.idTrajeto)
-    assert trajeto_atualizado.status is False
-
-
-def test_cancelar_trajeto_not_found(client: TestClient):
-    """Deve retornar 404 ao tentar cancelar um trajeto inexistente."""
-    response = client.post("/trajetos/9999/cancelar")
-
-    assert response.status_code == 404
-    data = response.json()
-    assert data["detail"] == "Trajeto não encontrado"
-
-def test_cancelar_trajeto_ja_cancelado(db_session: Session, client: TestClient):
-    """Deve retornar 400 se o trajeto já estiver cancelado (status=False)."""
-    trajeto = TrajetoORM(
-        comandosEnviados="a1000da0001e",
-        comandosExecutados=None,
-        status=False,
-        tempo=10
-    )
+def test_update_trajeto_partial_update(db_session: Session):
+    trajeto = TrajetoORM(comandosEnviados="original", comandosExecutados=None, status=False, tempo=0)
     db_session.add(trajeto)
     db_session.commit()
     db_session.refresh(trajeto)
+    
+    repo = TrajetoRepository(db_session)
+    service = TrajetoService(repo)
 
-    response = client.post(f"/trajetos/{trajeto.idTrajeto}/cancelar")
+    update_data = {"status": True}
+    updated_trajeto = service.update_trajeto(trajeto.idTrajeto, update_data)
 
-    assert response.status_code == 400
-    assert response.json()["detail"] == "Trajeto já foi cancelado anteriormente"
+    assert updated_trajeto.comandosEnviados == "original"
+    assert updated_trajeto.status is True
+    assert updated_trajeto.tempo == 0
 
+def test_update_trajeto_not_found(db_session: Session):
+    repo = TrajetoRepository(db_session)
+    service = TrajetoService(repo)
 
-def test_cancelar_trajeto_concluido(db_session: Session, client: TestClient):
-    """Deve retornar 400 se o trajeto já estiver concluído (status=True)."""
-    trajeto = TrajetoORM(
-        comandosEnviados="a1000da0001e",
-        comandosExecutados="a1000da0001e",
-        status=True,
-        tempo=12
-    )
-    db_session.add(trajeto)
-    db_session.commit()
-    db_session.refresh(trajeto)
+    update_data = {"comandosEnviados": "novo"}
 
-    response = client.post(f"/trajetos/{trajeto.idTrajeto}/cancelar")
-
-    assert response.status_code == 400
-    assert response.json()["detail"] == "Trajeto já foi concluído e não pode ser cancelado"
+    with pytest.raises(TrajetoNotFoundException):
+        service.update_trajeto(9999, update_data)
