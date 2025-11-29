@@ -29,7 +29,7 @@ async def stop_device(
     message = "STOP"
 
     try:
-        mqtt_manager.publish(topic, message)
+        mqtt_manager.publish(topic, message, qos=1)
     except Exception as e:
         raise HTTPException(
             status_code=500,
