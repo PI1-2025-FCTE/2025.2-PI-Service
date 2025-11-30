@@ -132,8 +132,9 @@ class ESP32Simulator:
         self.battery = max(0, self.battery - (sim_time * 0.5))
 
         result_payload = json.dumps({
-            "comandosExecutados": cmds_exec,
             "idTrajeto": traj_id,
+            "comandosExecutados": cmds_exec,
+            "status": True,
             "tempo": int(sim_time)
         })
         
