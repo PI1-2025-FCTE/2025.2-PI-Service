@@ -6,7 +6,7 @@ class TrajetoCreate(BaseModel):
     comandosEnviados: str = Field(..., min_length=1, description="Command string sent to ESP32")
     comandosExecutados: Optional[str] = Field(None, description="Commands actually executed")
     status: Optional[bool] = Field(True, description="True if completed successfully")
-    tempo: Optional[int] = Field(None, ge=0, description="Execution time in seconds")
+    tempo: Optional[int] = Field(None, ge=0, description="Execution time in milliseconds")
 
     model_config = {
         "json_schema_extra": {

@@ -69,7 +69,7 @@ class ESP32Simulator:
         index = 0
         commands_executed = ""
         trajectory_id = None
-        total_simulated_time = 0.0
+        total_simulated_time_ms = 0
 
         print(f"[{self.device_id}] Processando comandos: {command_str}")
 
@@ -81,30 +81,54 @@ class ESP32Simulator:
                     digits = command_str[index+1 : index+5]
                     commands_executed += f"a{digits}"
                     distance = int(digits)
-                    # Simula: 0.05s por cm
-                    total_simulated_time += (distance * 0.01)
+                    total_simulated_time_ms += int(distance * 10)
                     index += 5
                 else:
                     break
             
             elif char == 'e':
                 commands_executed += "e"
-                total_simulated_time += 1.0
+                total_simulated_time_ms += 1000
                 index += 1
             
             elif char == 'd':
                 commands_executed += "d"
-                total_simulated_time += 1.0
+                total_simulated_time_ms += 1000
                 index += 1
             
             elif char == 'i':
                 trajectory_id = command_str[index+1:]
                 break
-                
+            
             else:
                 index += 1
 
-        return commands_executed, trajectory_id, total_simulated_time
+        noise_factor = random.uniform(0.95, 1.05)
+        total_simulated_time_ms = int(total_simulated_time_ms * noise_factor)
+
+        return commands_executed, trajectory_id, total_simulated_time_ms
+
+    def execute_trajectory(self, cmds_exec, traj_id, sim_time_ms):
+        """
+        Executa o trajeto simulando o tempo de execução. Recebe tempo em ms.
+        """
+        print(f"[{self.device_id}] Executando trajeto... (Aguardando {sim_time_ms}ms)")
+        time.sleep(sim_time_ms / 1000)
+
+        self.battery = max(0, self.battery - (sim_time_ms * 0.0005))
+
+        result_payload = json.dumps({
+            "idTrajeto": traj_id,
+            "comandosExecutados": cmds_exec,
+            "status": True,
+            "tempo": sim_time_ms
+        })
+        
+        self.client.publish(self.topic_trajeto, result_payload, qos=1)
+        print(f"[{self.device_id}] Trajeto finalizado. Publicado em {self.topic_trajeto}")
+        
+        self.publish_status()
+
 
     def on_message(self, client, userdata, msg):
         """
@@ -121,27 +145,6 @@ class ESP32Simulator:
                 args=(cmds_exec, traj_id, sim_time),
                 daemon=True
             ).start()
-    
-    def execute_trajectory(self, cmds_exec, traj_id, sim_time):
-        """
-        Executa o trajeto simulando o tempo de execução.
-        """
-        print(f"[{self.device_id}] Executando trajeto... (Aguardando {sim_time:.2f}s)")
-        time.sleep(sim_time)
-
-        self.battery = max(0, self.battery - (sim_time * 0.5))
-
-        result_payload = json.dumps({
-            "idTrajeto": traj_id,
-            "comandosExecutados": cmds_exec,
-            "status": True,
-            "tempo": int(sim_time)
-        })
-        
-        self.client.publish(self.topic_trajeto, result_payload, qos=1)
-        print(f"[{self.device_id}] Trajeto finalizado. Publicado em {self.topic_trajeto}")
-        
-        self.publish_status()
 
     def publish_status(self):
         """
