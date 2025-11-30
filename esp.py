@@ -1,97 +1,197 @@
-import time
+import sys
 import json
+import time
 import random
-import re
+import datetime
 import paho.mqtt.client as mqtt
+import threading
 
-BROKER = "localhost"
-PORT = 1883
-DEVICE_ID = "esp32-123"
-STATUS_TOPIC = f"devices/{DEVICE_ID}/status"
-TRAJETO_TOPIC = f"devices/{DEVICE_ID}/trajeto"
-COMMANDS_TOPIC = f"devices/{DEVICE_ID}/commands"
+class ESP32Simulator:
+    """
+    Simula uma ESP32 com conexão MQTT, gerenciamento de bateria, LWT e
+    processamento de comandos de movimentação.
+    """
 
-# Global trajeto ID
-trajeto_id = None
+    def __init__(self, device_id, broker="localhost", port=1883):
+        """
+        Inicializa o dispositivo virtual.
+        """
+        self.device_id = device_id
+        self.broker = broker
+        self.port = port
+        self.client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2, client_id=device_id)
+        
+        self.battery = 100.0
+        self.online = False
+        
+        self.topic_commands = f"devices/{self.device_id}/commands"
+        self.topic_status = f"devices/{self.device_id}/status"
+        self.topic_trajeto = f"devices/{self.device_id}/trajeto"
 
-def extract_trajeto_id(command: str):
-    """Extracts the number after the last 'i' in the command string."""
-    match = re.search(r"i(\d+)(?!.*i)", command)  # last occurrence of i followed by digits
-    if match:
-        return match.group(1)
-    return None
+        self.client.on_connect = self.on_connect
+        self.client.on_message = self.on_message
 
-def on_connect(client, userdata, flags, rc):
-    print(f"Conectado com código {rc}")
-    client.subscribe(COMMANDS_TOPIC)
+    def _get_timestamp(self):
+        """
+        Retorna o timestamp atual em formato ISO.
+        """
+        return datetime.datetime.now().isoformat()
 
-def on_message(client, userdata, msg):
-    global trajeto_id
-    payload = msg.payload.decode().strip()
-    print(f"[COMANDO RECEBIDO] {msg.topic}: {payload}")
+    def configure_lwt(self):
+        """
+        Configura o Last Will and Testament (LWT) para indicar desconexão inesperada.
+        """
+        payload = json.dumps({
+            "battery": None,
+            "online": False,
+            "timestamp": self._get_timestamp()
+        })
+        self.client.will_set(self.topic_status, payload=payload, qos=1, retain=True)
 
-    new_id = extract_trajeto_id(payload)
-    if new_id:
-        trajeto_id = new_id
-        print(f"[TRAJETO ID ATUALIZADO] {trajeto_id}")
+    def on_connect(self, client, userdata, flags, reason_code, properties):
+        """
+        Callback executado ao conectar ao broker.
+        """
+        if reason_code == 0:
+            print(f"[{self.device_id}] Conectado ao broker MQTT.")
+            self.online = True
+            client.subscribe(self.topic_commands)
+            print(f"[{self.device_id}] Inscrito em: {self.topic_commands}")
+            self.publish_status()
+        else:
+            print(f"[{self.device_id}] Falha na conexão. Código: {reason_code}")
+
+    def process_commands(self, command_str):
+        """
+        Analisa a string de comandos recebida, simula o tempo de execução
+        e separa o ID do trajeto.
+        """
+        index = 0
+        commands_executed = ""
+        trajectory_id = None
+        total_simulated_time_ms = 0
+
+        print(f"[{self.device_id}] Processando comandos: {command_str}")
+
+        while index < len(command_str):
+            char = command_str[index]
+            
+            if char == 'a':
+                if index + 4 < len(command_str):
+                    digits = command_str[index+1 : index+5]
+                    commands_executed += f"a{digits}"
+                    distance = int(digits)
+                    total_simulated_time_ms += int(distance * 10)
+                    index += 5
+                else:
+                    break
+            
+            elif char == 'e':
+                commands_executed += "e"
+                total_simulated_time_ms += 1000
+                index += 1
+            
+            elif char == 'd':
+                commands_executed += "d"
+                total_simulated_time_ms += 1000
+                index += 1
+            
+            elif char == 'i':
+                trajectory_id = command_str[index+1:]
+                break
+            
+            else:
+                index += 1
+
+        noise_factor = random.uniform(0.95, 1.05)
+        total_simulated_time_ms = int(total_simulated_time_ms * noise_factor)
+
+        return commands_executed, trajectory_id, total_simulated_time_ms
+
+    def execute_trajectory(self, cmds_exec, traj_id, sim_time_ms):
+        """
+        Executa o trajeto simulando o tempo de execução. Recebe tempo em ms.
+        """
+        print(f"[{self.device_id}] Executando trajeto... (Aguardando {sim_time_ms}ms)")
+        time.sleep(sim_time_ms / 1000)
+
+        self.battery = max(0, self.battery - (sim_time_ms * 0.0005))
+
+        result_payload = json.dumps({
+            "idTrajeto": traj_id,
+            "comandosExecutados": cmds_exec,
+            "status": True,
+            "tempo": sim_time_ms
+        })
+        
+        self.client.publish(self.topic_trajeto, result_payload, qos=1)
+        print(f"[{self.device_id}] Trajeto finalizado. Publicado em {self.topic_trajeto}")
+        
+        self.publish_status()
+
+
+    def on_message(self, client, userdata, msg):
+        """
+        Callback executado ao receber uma mensagem no tópico inscrito.
+        """
+        payload_str = msg.payload.decode('utf-8')
+        print(f"[{self.device_id}] Comando recebido: {payload_str}")
+
+        cmds_exec, traj_id, sim_time = self.process_commands(payload_str)
+
+        if traj_id:
+            threading.Thread(
+                target=self.execute_trajectory, 
+                args=(cmds_exec, traj_id, sim_time),
+                daemon=True
+            ).start()
+
+    def publish_status(self):
+        """
+        Publica o estado atual da bateria e conectividade.
+        """
+        payload = json.dumps({
+            "battery": round(self.battery, 2),
+            "online": self.online,
+            "timestamp": self._get_timestamp()
+        })
+        self.client.publish(self.topic_status, payload, retain=True)
+
+    def run(self):
+        """
+        Inicia o loop principal do dispositivo.
+        """
+        self.configure_lwt()
+        
+        try:
+            self.client.connect(self.broker, self.port, 60)
+            self.client.loop_start()
+
+            while True:
+                time.sleep(5) 
+                
+                if self.battery > 0:
+                    decay = random.uniform(0.1, 0.5)
+                    self.battery = max(0, self.battery - decay)
+                else:
+                    self.battery = 0
+                
+                self.publish_status()
+
+        except KeyboardInterrupt:
+            print(f"\n[{self.device_id}] Desligando...")
+            off_payload = json.dumps({"battery": None, "online": False, "timestamp": self._get_timestamp()})
+            self.client.publish(self.topic_status, off_payload, qos=1,retain=True)
+            self.client.disconnect()
+            self.client.loop_stop()
+        except Exception as e:
+            print(f"Erro: {e}")
+
+if __name__ == "__main__":
+    if len(sys.argv) > 1:
+        my_id = sys.argv[1]
     else:
-        print("[AVISO] Nenhum trajeto_id encontrado no comando.")
+        my_id = "esp32_default"
 
-client = mqtt.Client(client_id=DEVICE_ID, clean_session=True)
-
-# Last Will
-lwt_payload = json.dumps({
-    "online": False,
-    "battery": None,
-    "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ")
-})
-client.will_set(STATUS_TOPIC, payload=lwt_payload, qos=1, retain=True)
-
-client.on_connect = on_connect
-client.on_message = on_message
-
-client.connect(BROKER, PORT, keepalive=60)
-client.loop_start()
-
-battery_level = 100
-status_payload = {
-    "online": True,
-    "battery": battery_level,
-    "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ")
-}
-client.publish(STATUS_TOPIC, json.dumps(status_payload), qos=1, retain=True)
-print(f"[STATUS PUBLISHED] {status_payload}")
-
-try:
-    while True:
-        trajeto_payload = {
-            "x": round(random.uniform(0, 10), 2),
-            "y": round(random.uniform(0, 10), 2),
-            "speed": round(random.uniform(0, 2), 2),
-            "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ"),
-            "trajeto_id": trajeto_id  # last received ID
-        }
-        client.publish(TRAJETO_TOPIC, json.dumps(trajeto_payload), qos=0, retain=False)
-        print(f"[TRAJETO PUBLISHED] {trajeto_payload}")
-
-        battery_level = max(battery_level - random.uniform(0.5, 1.5), 0)
-        status_payload = {
-            "online": True,
-            "battery": round(battery_level, 2),
-            "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ")
-        }
-        client.publish(STATUS_TOPIC, json.dumps(status_payload), qos=1, retain=True)
-        print(f"[STATUS PUBLISHED] {status_payload}")
-
-        time.sleep(5)
-
-except KeyboardInterrupt:
-    offline_payload = {
-        "online": False,
-        "battery": round(battery_level, 2),
-        "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ")
-    }
-    client.publish(STATUS_TOPIC, json.dumps(offline_payload), qos=1, retain=True)
-    print(f"[STATUS OFFLINE PUBLISHED] {offline_payload}")
-    client.loop_stop()
-    client.disconnect()
+    device = ESP32Simulator(device_id=my_id)
+    device.run()

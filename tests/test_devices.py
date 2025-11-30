@@ -42,7 +42,7 @@ def test_stop_device_success(client: TestClient, mqtt_manager_mock: MQTTManager)
 
     assert response.status_code == 200
     assert response.json() == {"detail": f"Comando de parada enviado para {device_id} com sucesso."}
-    mqtt_manager_mock.publish.assert_called_once_with(f"devices/{device_id}/commands", "STOP")
+    mqtt_manager_mock.publish.assert_called_once_with(f"devices/{device_id}/commands", "STOP", qos=1)
 
 def test_stop_device_offline(client: TestClient, mqtt_manager_mock: MQTTManager):
     device_id = "dev_456"
@@ -66,4 +66,4 @@ def test_stop_device_publish_failure(client: TestClient, mqtt_manager_mock: MQTT
 
     assert response.status_code == 500
     assert "Falha ao enviar comando MQTT" in response.json()["detail"]
-    mqtt_manager_mock.publish.assert_called_once_with(f"devices/{device_id}/commands", "STOP")
+    mqtt_manager_mock.publish.assert_called_once_with(f"devices/{device_id}/commands", "STOP", qos=1)

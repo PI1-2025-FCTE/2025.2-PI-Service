@@ -27,7 +27,7 @@ async def create_trajeto(
     message = f"{trajeto.comandosEnviados}i{trajeto_obj.idTrajeto}"
 
     try:
-        mqtt_manager.publish(topic, message)
+        mqtt_manager.publish(topic, message, qos=1)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Falha ao enviar comandos MQTT: {e}")
 
